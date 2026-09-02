@@ -1,47 +1,283 @@
-name: Build APK
+from pathlib import Path
+import zipfile, textwrap, shutil
 
+root = Path("/mnt/data/BimehIranPro")
+if root.exists():
+    shutil.rmtree(root)
+
+files = {
+"settings.gradle.kts": '''
+pluginManagement {
+    repositories { google(); mavenCentral(); gradlePluginPortal() }
+}
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories { google(); mavenCentral() }
+}
+rootProject.name = "BimehIranPro"
+include(":app")
+''',
+"build.gradle.kts": '''
+plugins {
+    id("com.android.application") version "8.6.1" apply false
+}
+''',
+"gradle.properties": '''
+org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+''',
+"app/build.gradle.kts": '''
+plugins { id("com.android.application") }
+
+android {
+    namespace = "com.iran31124.bimeh"
+    compileSdk = 35
+    defaultConfig {
+        applicationId = "com.iran31124.bimeh"
+        minSdk = 23
+        targetSdk = 35
+        versionCode = 3
+        versionName = "3.0"
+    }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+''',
+"app/src/main/AndroidManifest.xml": '''
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application
+        android:theme="@style/AppTheme"
+        android:label="مدیریت حرفه‌ای اقساط بیمه ایران"
+        android:allowBackup="true"
+        android:supportsRtl="true">
+        <activity android:name=".MainActivity" android:screenOrientation="portrait" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
+''',
+"app/src/main/res/values/styles.xml": '''
+<resources>
+    <style name="AppTheme" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:statusBarColor">#07523E</item>
+        <item name="android:navigationBarColor">#F3F6F4</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">#087F5B</item>
+    </style>
+</resources>
+''',
+"app/src/main/res/drawable/bg_header.xml": '''
+<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#087F5B"/><corners android:bottomLeftRadius="30dp" android:bottomRightRadius="30dp"/></shape>
+''',
+"app/src/main/res/drawable/bg_card.xml": '''
+<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#FFFFFF"/><corners android:radius="18dp"/><stroke android:width="1dp" android:color="#DCE6E1"/><padding android:left="16dp" android:top="14dp" android:right="16dp" android:bottom="14dp"/></shape>
+''',
+"app/src/main/res/drawable/bg_input.xml": '''
+<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#F7FAF8"/><corners android:radius="13dp"/><stroke android:width="1dp" android:color="#D4E0DA"/><padding android:left="14dp" android:top="8dp" android:right="14dp" android:bottom="8dp"/></shape>
+''',
+"app/src/main/res/drawable/bg_primary.xml": '''
+<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#087F5B"/><corners android:radius="14dp"/><padding android:left="16dp" android:top="8dp" android:right="16dp" android:bottom="8dp"/></shape>
+''',
+"app/src/main/res/drawable/bg_secondary.xml": '''
+<shape xmlns:android="http://schemas.android.com/apk/res/android"><solid android:color="#E8F3EE"/><corners android:radius="14dp"/><padding android:left="16dp" android:top="8dp" android:right="16dp" android:bottom="8dp"/></shape>
+''',
+"app/src/main/java/com/iran31124/bimeh/MainActivity.java": r'''
+package com.iran31124.bimeh;
+
+import android.app.*;
+import android.os.*;
+import android.content.*;
+import android.database.Cursor;
+import android.database.sqlite.*;
+import android.graphics.Color;
+import android.text.InputType;
+import android.view.*;
+import android.widget.*;
+import java.security.MessageDigest;
+import java.text.NumberFormat;
+import java.util.*;
+
+public class MainActivity extends Activity {
+    DB db; LinearLayout content; SharedPreferences prefs;
+    final int GREEN=Color.rgb(8,127,91), DARK=Color.rgb(29,43,38), GRAY=Color.rgb(103,119,112);
+
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        db=new DB(this); prefs=getSharedPreferences("auth",0);
+        if(prefs.getBoolean("logged",false)) dashboard(); else login();
+    }
+
+    TextView tv(String s,float z,int c){ TextView v=new TextView(this);v.setText(s);v.setTextSize(z);v.setTextColor(c);v.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);v.setPadding(4,5,4,5);return v; }
+    EditText ed(String hint,int type){ EditText e=new EditText(this);e.setHint(hint);e.setTextSize(15);e.setTextColor(DARK);e.setHintTextColor(Color.rgb(130,145,139));e.setGravity(Gravity.RIGHT);e.setInputType(type);e.setBackgroundResource(R.drawable.bg_input);e.setLayoutParams(new LinearLayout.LayoutParams(-1,56));return e; }
+    Button bt(String s,boolean primary){ Button b=new Button(this);b.setText(s);b.setTextSize(15);b.setTextColor(primary?Color.WHITE:GREEN);b.setAllCaps(false);b.setBackgroundResource(primary?R.drawable.bg_primary:R.drawable.bg_secondary);return b; }
+    void frame(String title){
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(Color.rgb(243,246,244));root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);setContentView(root);
+        LinearLayout h=new LinearLayout(this);h.setGravity(Gravity.CENTER_VERTICAL);h.setPadding(18,8,18,8);h.setBackgroundResource(R.drawable.bg_header);
+        TextView t=tv(title,20,Color.WHITE);t.setTypeface(null,1);h.addView(t,new LinearLayout.LayoutParams(0,64,1));root.addView(h);
+        content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(15,15,15,20);ScrollView sv=new ScrollView(this);sv.addView(content);root.addView(sv,new LinearLayout.LayoutParams(-1,0,1));
+    }
+    void card(View v){ if(v instanceof LinearLayout)((LinearLayout)v).setPadding(16,14,16,14); v.setBackgroundResource(R.drawable.bg_card); LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,12);v.setLayoutParams(p);content.addView(v); }
+    void gap(int n){Space s=new Space(this);content.addView(s,new LinearLayout.LayoutParams(1,n));}
+    String money(long n){return NumberFormat.getInstance(Locale.US).format(n)+" تومان";}
+
+    void login(){
+        frame("ورود امن به سامانه");
+        gap(45);TextView logo=tv("بیمه ایران",30,GREEN);logo.setGravity(Gravity.CENTER);logo.setTypeface(null,1);content.addView(logo,new LinearLayout.LayoutParams(-1,55));
+        TextView sub=tv("سامانه مدیریت حرفه‌ای اقساط • کد 31124",15,GRAY);sub.setGravity(Gravity.CENTER);content.addView(sub);gap(18);
+        LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);card(c);
+        c.addView(tv("رمز عبور",17,DARK));EditText p=ed("رمز عبور",InputType.TYPE_CLASS_TEXT|InputType.TYPE_TEXT_VARIATION_PASSWORD);c.addView(p);
+        Button go=bt("ورود به سامانه",true);c.addView(go,new LinearLayout.LayoutParams(-1,58));
+        TextView hint=tv("رمز اولیه: 31124",13,GRAY);hint.setGravity(Gravity.CENTER);c.addView(hint);
+        go.setOnClickListener(v->{String x=p.getText().toString();String saved=prefs.getString("pass","");if((saved.isEmpty()&&x.equals("31124"))||(!saved.isEmpty()&&sha(x).equals(saved))){if(saved.isEmpty())prefs.edit().putString("pass",sha("31124")).apply();prefs.edit().putBoolean("logged",true).apply();dashboard();}else Toast.makeText(this,"رمز عبور نادرست است",Toast.LENGTH_SHORT).show();});
+    }
+
+    void dashboard(){
+        frame("داشبورد مدیریت بیمه");
+        LinearLayout head=new LinearLayout(this);head.setOrientation(LinearLayout.VERTICAL);head.addView(tv("نمایندگی بیمه ایران",22,GREEN));head.addView(tv("کد نمایندگی: 31124  |  تلفن: 09155004715",14,GRAY));card(head);
+        long[] st=db.stats();
+        LinearLayout stats=new LinearLayout(this);stats.setOrientation(LinearLayout.VERTICAL);stats.addView(tv("خلاصه عملکرد",18,DARK));stats.addView(tv("بیمه‌نامه‌ها: "+st[0]+"   •   اقساط: "+st[1],15,GRAY));stats.addView(tv("پرداخت‌شده: "+st[2]+"   •   مانده: "+money(st[3]),15,GRAY));card(stats);
+        Button add=bt("➕  ثبت بیمه‌نامه جدید",true);content.addView(add,new LinearLayout.LayoutParams(-1,58));
+        Button list=bt("📋  بیمه‌نامه‌ها و پیگیری اقساط",false);content.addView(list,new LinearLayout.LayoutParams(-1,58));
+        Button overdue=bt("⏰  اقساط سررسید / پیگیری",false);content.addView(overdue,new LinearLayout.LayoutParams(-1,58));
+        Button search=bt("🔎  جستجوی مشتری یا بیمه‌نامه",false);content.addView(search,new LinearLayout.LayoutParams(-1,58));
+        Button pass=bt("🔐  تغییر رمز عبور",false);content.addView(pass,new LinearLayout.LayoutParams(-1,58));
+        Button out=bt("خروج از حساب",false);content.addView(out,new LinearLayout.LayoutParams(-1,58));
+        add.setOnClickListener(v->addPolicy());list.setOnClickListener(v->policies(""));overdue.setOnClickListener(v->policies("overdue"));search.setOnClickListener(v->search());pass.setOnClickListener(v->changePass());out.setOnClickListener(v->{prefs.edit().putBoolean("logged",false).apply();login();});
+    }
+
+    void addPolicy(){
+        frame("ثبت بیمه‌نامه و ایجاد اقساط");
+        EditText name=ed("نام و نام خانوادگی",1);content.addView(name);EditText phone=ed("شماره تلفن",3);content.addView(phone);
+        EditText policy=ed("شماره بیمه‌نامه",1);content.addView(policy);EditText amount=ed("مبلغ کل (تومان)",2);content.addView(amount);
+        EditText count=ed("تعداد اقساط",2);content.addView(count);EditText start=ed("تاریخ اولین قسط (مثلاً 1405/07/10)",1);content.addView(start);
+        EditText interval=ed("فاصله اقساط به ماه (پیش‌فرض 1)",2);interval.setText("1");content.addView(interval);gap(10);
+        Button save=bt("ذخیره و ساخت جدول اقساط",true);content.addView(save,new LinearLayout.LayoutParams(-1,58));
+        Button back=bt("بازگشت",false);content.addView(back,new LinearLayout.LayoutParams(-1,58));
+        save.setOnClickListener(v->{
+            try{
+                if(name.getText().length()==0||policy.getText().length()==0||amount.getText().length()==0||count.getText().length()==0){Toast.makeText(this,"فیلدهای اصلی را کامل کنید",Toast.LENGTH_SHORT).show();return;}
+                long total=Long.parseLong(amount.getText().toString().replace(",",""));int n=Integer.parseInt(count.getText().toString());int step=interval.getText().length()==0?1:Integer.parseInt(interval.getText().toString());
+                if(total<=0||n<1||n>120){Toast.makeText(this,"مبلغ یا تعداد اقساط نامعتبر است",Toast.LENGTH_SHORT).show();return;}
+                long id=db.addPolicy(name.getText().toString(),phone.getText().toString(),policy.getText().toString(),total,n,start.getText().toString());
+                long base=total/n, rem=total%n;
+                for(int i=1;i<=n;i++) db.addInstallment(id,i,base+(i<=rem?1:0),start.getText().toString(),step);
+                Toast.makeText(this,"بیمه‌نامه و "+n+" قسط ایجاد شد",Toast.LENGTH_LONG).show();policies("");
+            }catch(Exception e){Toast.makeText(this,"اطلاعات عددی را بررسی کنید",Toast.LENGTH_SHORT).show();}
+        });
+        back.setOnClickListener(v->dashboard());
+    }
+
+    void policies(String mode){
+        frame(mode.equals("overdue")?"اقساط نیازمند پیگیری":"فهرست بیمه‌نامه‌ها");
+        Cursor c=mode.equals("overdue")?db.overdue():db.policies();
+        if(!c.moveToFirst()){TextView e=tv(mode.equals("overdue")?"قسط سررسیدشده‌ای ثبت نشده است.":"هنوز بیمه‌نامه‌ای ثبت نشده است.",17,GRAY);e.setGravity(Gravity.CENTER);content.addView(e,new LinearLayout.LayoutParams(-1,110));}
+        do{
+            long id=c.getLong(c.getColumnIndexOrThrow("_id"));String name=c.getString(c.getColumnIndexOrThrow("name"));String pol=c.getString(c.getColumnIndexOrThrow("policy"));long total=c.getLong(c.getColumnIndexOrThrow("total"));
+            LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.addView(tv("👤 "+name,18,DARK));box.addView(tv("بیمه‌نامه: "+pol,14,GRAY));box.addView(tv("مبلغ کل: "+money(total),14,GRAY));
+            if(mode.equals("overdue")) box.addView(tv("⏰ وضعیت: نیازمند پیگیری",14,Color.rgb(170,80,30)));
+            Button detail=bt("مشاهده اقساط / ثبت پرداخت",true);box.addView(detail,new LinearLayout.LayoutParams(-1,52));card(box);
+            detail.setOnClickListener(v->installments(id,name,pol));
+        }while(c.moveToNext());c.close();
+        Button back=bt("بازگشت به داشبورد",false);content.addView(back,new LinearLayout.LayoutParams(-1,58));back.setOnClickListener(v->dashboard());
+    }
+
+    void installments(long id,String name,String pol){
+        frame("اقساط • "+name);
+        TextView h=tv("بیمه‌نامه: "+pol,17,GREEN);content.addView(h);
+        Cursor c=db.installments(id);
+        if(!c.moveToFirst()) content.addView(tv("قسطی موجود نیست",16,GRAY));
+        do{
+            long iid=c.getLong(c.getColumnIndexOrThrow("_id"));int no=c.getInt(c.getColumnIndexOrThrow("no"));long amt=c.getLong(c.getColumnIndexOrThrow("amount"));int paid=c.getInt(c.getColumnIndexOrThrow("paid"));
+            LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);
+            box.addView(tv("قسط "+no+"   |   "+money(amt),17,DARK));box.addView(tv(paid==1?"✅ پرداخت شده":"⏳ پرداخت نشده",14,paid==1?GREEN:Color.rgb(170,80,30)));
+            Button b=bt(paid==1?"لغو پرداخت":"ثبت پرداخت",paid==1?false:true);box.addView(b,new LinearLayout.LayoutParams(-1,50));card(box);
+            b.setOnClickListener(v->{db.setPaid(iid,paid==0);installments(id,name,pol);});
+        }while(c.moveToNext());c.close();
+        Button back=bt("بازگشت",false);content.addView(back,new LinearLayout.LayoutParams(-1,58));back.setOnClickListener(v->policies(""));
+    }
+
+    void search(){
+        frame("جستجو");
+        EditText q=ed("نام مشتری یا شماره بیمه‌نامه",1);content.addView(q);Button go=bt("جستجو",true);content.addView(go,new LinearLayout.LayoutParams(-1,58));
+        go.setOnClickListener(v->{String s=q.getText().toString().trim();if(s.isEmpty()){Toast.makeText(this,"عبارت جستجو را وارد کنید",Toast.LENGTH_SHORT).show();return;}showSearchResults(s);});
+        Button back=bt("بازگشت",false);content.addView(back,new LinearLayout.LayoutParams(-1,58));back.setOnClickListener(v->dashboard());
+    }
+    void showSearchResults(String s){
+        frame("نتایج جستجو");
+        Cursor c=db.search(s);if(!c.moveToFirst()){content.addView(tv("نتیجه‌ای پیدا نشد.",17,GRAY));}
+        do{long id=c.getLong(c.getColumnIndexOrThrow("_id"));String name=c.getString(c.getColumnIndexOrThrow("name"));String pol=c.getString(c.getColumnIndexOrThrow("policy"));LinearLayout x=new LinearLayout(this);x.setOrientation(LinearLayout.VERTICAL);x.addView(tv("👤 "+name,18,DARK));x.addView(tv("بیمه‌نامه: "+pol,14,GRAY));Button b=bt("مشاهده اقساط",true);x.addView(b,new LinearLayout.LayoutParams(-1,52));card(x);b.setOnClickListener(v->installments(id,name,pol));}while(c.moveToNext());c.close();
+        Button back=bt("بازگشت",false);content.addView(back,new LinearLayout.LayoutParams(-1,58));back.setOnClickListener(v->search());
+    }
+
+    void changePass(){
+        frame("تغییر رمز عبور");EditText old=ed("رمز فعلی",129);content.addView(old);EditText np=ed("رمز جدید",129);content.addView(np);EditText cp=ed("تکرار رمز جدید",129);content.addView(cp);
+        Button b=bt("ذخیره رمز جدید",true);content.addView(b,new LinearLayout.LayoutParams(-1,58));Button back=bt("بازگشت",false);content.addView(back,new LinearLayout.LayoutParams(-1,58));
+        b.setOnClickListener(v->{String cur=prefs.getString("pass",sha("31124"));if(!sha(old.getText().toString()).equals(cur)){Toast.makeText(this,"رمز فعلی نادرست است",Toast.LENGTH_SHORT).show();return;}if(np.length()<4||!np.toString().equals(cp.toString())){Toast.makeText(this,"رمز جدید را صحیح وارد کنید",Toast.LENGTH_SHORT).show();return;}prefs.edit().putString("pass",sha(np.toString())).apply();Toast.makeText(this,"رمز تغییر کرد",Toast.LENGTH_SHORT).show();dashboard();});back.setOnClickListener(v->dashboard());
+    }
+    String sha(String s){try{byte[] b=MessageDigest.getInstance("SHA-256").digest(s.getBytes("UTF-8"));StringBuilder x=new StringBuilder();for(byte q:b)x.append(String.format("%02x",q));return x.toString();}catch(Exception e){return s;}}
+    
+    class DB extends SQLiteOpenHelper{
+        DB(Context c){super(c,"bimeh31124.db",null,1);}
+        public void onCreate(SQLiteDatabase d){d.execSQL("CREATE TABLE policies(_id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT,phone TEXT,policy TEXT,total INTEGER,count INTEGER,start TEXT)");d.execSQL("CREATE TABLE installments(_id INTEGER PRIMARY KEY AUTOINCREMENT,policy_id INTEGER,no INTEGER,amount INTEGER,due TEXT,paid INTEGER DEFAULT 0)");}
+        public void onUpgrade(SQLiteDatabase d,int a,int b){}
+        long addPolicy(String n,String ph,String p,long t,int c,String s){ContentValues v=new ContentValues();v.put("name",n);v.put("phone",ph);v.put("policy",p);v.put("total",t);v.put("count",c);v.put("start",s);return getWritableDatabase().insert("policies",null,v);}
+        void addInstallment(long id,int no,long amount,String due,int step){ContentValues v=new ContentValues();v.put("policy_id",id);v.put("no",no);v.put("amount",amount);v.put("due",due);v.put("paid",0);getWritableDatabase().insert("installments",null,v);}
+        Cursor policies(){return getReadableDatabase().query("policies",null,null,null,null,null,"_id DESC");}
+        Cursor search(String s){return getReadableDatabase().query("policies",null,"name LIKE ? OR phone LIKE ? OR policy LIKE ?",new String[]{"%"+s+"%","%"+s+"%","%"+s+"%"},null,null,"_id DESC");}
+        Cursor installments(long id){return getReadableDatabase().query("installments",null,"policy_id=?",new String[]{""+id},null,null,"no ASC");}
+        Cursor overdue(){return getReadableDatabase().rawQuery("SELECT p._id,p.name,p.policy,p.total FROM policies p JOIN installments i ON p._id=i.policy_id WHERE i.paid=0 ORDER BY p._id DESC",null);}
+        void setPaid(long id,boolean yes){ContentValues v=new ContentValues();v.put("paid",yes?1:0);getWritableDatabase().update("installments",v,"_id=?",new String[]{""+id});}
+        long[] stats(){long policies=scalar("SELECT COUNT(*) FROM policies");long inst=scalar("SELECT COUNT(*) FROM installments");long paid=scalar("SELECT COUNT(*) FROM installments WHERE paid=1");long remain=scalar("SELECT COALESCE(SUM(amount),0) FROM installments WHERE paid=0");return new long[]{policies,inst,paid,remain};}
+        long scalar(String q){Cursor c=getReadableDatabase().rawQuery(q,null);long x=0;if(c.moveToFirst())x=c.getLong(0);c.close();return x;}
+    }
+}
+''',
+".github/workflows/build.yml": '''
+name: Build Advanced APK
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-
+    branches: [main]
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Extract project
-        run: |
-          rm -rf build_project
-          mkdir build_project
-          unzip -q BimehIranInstallments.zip -d build_project
-          echo "Project extracted:"
-          find build_project -maxdepth 3 -type f | sort
-
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-
-      - name: Build APK
-        working-directory: build_project/BimehIranInstallments
+      - name: Build Debug APK
         run: gradle assembleDebug
-
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: BimehIran-debug-apk
-          path: build_project/BimehIranInstallments/app/build/outputs/apk/debug/app-debug.apk
+          name: BimehIranPro-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+'''
+}
+
+for rel, content in files.items():
+    p = root / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(textwrap.dedent(content).strip() + "\n", encoding="utf-8")
+
+zip_path = Path("/mnt/data/BimehIranPro-v3-advanced.zip")
+if zip_path.exists():
+    zip_path.unlink()
+with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as z:
+    for p in root.rglob("*"):
+        if p.is_file():
+            z.write(p, p.relative_to(root.parent))
+
+print(f"نسخه پیشرفته پروژه آماده شد: {zip_path}")
